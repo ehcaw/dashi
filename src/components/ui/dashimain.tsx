@@ -137,7 +137,6 @@ export default function AnimatedVectorBox({
       setIsExpanded(false);
       setIsActivatedState(false);
       setHasMovedLeft(false);
-      setChatMessages([]);
       setVoiceResponse("");
       setIsGeneratingVoiceResponse(false);
       setPositionsSetToDefault(true);
@@ -153,9 +152,7 @@ export default function AnimatedVectorBox({
       "isExpanded:",
       isExpanded,
       "isActivatedState:",
-      isActivatedState,
-      "isRecording:",
-      isRecording
+      isActivatedState
     );
 
     const handleKeyDown = async (event: KeyboardEvent) => {
@@ -187,6 +184,7 @@ export default function AnimatedVectorBox({
         if (isActivated && !isActivatedState) {
           console.log("Activating chat mode...");
           setIsActivatedState(true);
+          setIsExpanded(false); // Reset voice expansion when entering chat mode
         }
       }
 
@@ -194,8 +192,8 @@ export default function AnimatedVectorBox({
       const isVKey =
         event.key === "v" || event.key === "V" || event.keyCode === 86;
       if ((event.metaKey || event.ctrlKey) && event.altKey && isVKey) {
-        if (!isExpanded) {
-          setIsExpanded(true);
+        if (!isExpanded && !isActivatedState) {
+          setIsExpanded(true); // Expand only while held
         }
         if (!isRecording) {
           try {
@@ -221,18 +219,25 @@ export default function AnimatedVectorBox({
         if (isActivated && !isActivatedState) {
           console.log("Activating chat mode with T key...");
           setIsActivatedState(true);
+          setIsExpanded(false); // Reset voice expansion when entering chat mode
         }
       }
     };
 
     const handleKeyUp = async (event: KeyboardEvent) => {
+      // Command + Option + V (voice mode stop)
       const isVKey =
         event.key === "v" || event.key === "V" || event.keyCode === 86;
       if ((event.metaKey || event.ctrlKey) && event.altKey && isVKey) {
+        if (isExpanded && !isActivatedState) {
+          setIsExpanded(false); // Collapse when released (only if not in chat mode)
+        }
         if (isRecording) {
           try {
             const result = await stopAndTranscribe();
+            console.log(result);
             setTranscription(result);
+            // Add transcription as a user message in chat
             if (result) {
               setChatMessages((prev) => [
                 ...prev,
@@ -243,13 +248,10 @@ export default function AnimatedVectorBox({
               const dashiResponseStream = await generate_response(result);
               setChatMessages((prev) => [...prev, { text: "", isUser: false }]);
               for await (const chunk of dashiResponseStream) {
-                if (
-                  chunk.messageType === "assistant_message" &&
-                  typeof chunk.content === "string" &&
-                  chunk.content !== "undefined"
-                ) {
+                if (chunk.content && chunk.content !== "undefined") {
                   setVoiceResponse((prev) => prev + chunk.content);
                   setChatMessages((prev) => {
+                    // Copy the array and the last message
                     const updated = [...prev];
                     if (updated.length > 0) {
                       updated[updated.length - 1] = {
@@ -310,12 +312,9 @@ export default function AnimatedVectorBox({
         const dashiResponseStream = await generate_response(chatInput);
         setChatMessages((prev) => [...prev, { text: "", isUser: false }]);
         for await (const chunk of dashiResponseStream) {
-          if (
-            chunk.messageType === "assistant_message" &&
-            typeof chunk.content === "string" &&
-            chunk.content !== "undefined"
-          ) {
+          if (chunk.content && chunk.content !== "undefined") {
             setChatMessages((prev) => {
+              // Copy the array and the last message
               const updated = [...prev];
               if (updated.length > 0) {
                 updated[updated.length - 1] = {
@@ -333,22 +332,14 @@ export default function AnimatedVectorBox({
   };
 
   // Determine current width, height, and position based on states
-  const currentWidth = isResetting
-    ? isActivatedState
-      ? 400
-      : isExpanded
-      ? 300
-      : 100
-    : isActivatedState
-    ? 400
-    : isExpanded
-    ? 300
-    : isActivated
-    ? 100
-    : 100;
+  // In chat mode, width is always 100. In voice mode, width can expand to 300 if isExpanded is true
+  const currentWidth = isActivatedState ? 100 : isExpanded ? 300 : 100;
 
   // Calculate width for voice response
   const getVoiceResponseWidth = () => {
+    // In chat mode, always use fixed width regardless of voice response or expansion state
+    if (isActivatedState) return 100;
+    
     if (!voiceResponse && !isGeneratingVoiceResponse) return currentWidth;
 
     // Base width: Dashi (60px) + gap (20px) + minimum text width (200px)
@@ -478,36 +469,75 @@ export default function AnimatedVectorBox({
           {/* Chat messages area */}
           <div
             style={{
-              flex: 1,
-              overflowY: "auto",
+              position: "relative",
               marginBottom: "20px",
-              padding: "10px",
-              borderRadius: "8px",
+              borderRadius: "20px",
+              padding: isRecording && isActivatedState ? "3px" : 0,
+              background:
+                isRecording && isActivatedState
+                  ? "linear-gradient(120deg, #D500D8 0%, #8CEBE5 100%)"
+                  : "transparent",
+              boxShadow:
+                isRecording && isActivatedState
+                  ? "0 0 24px 4px #D500D880, 0 0 32px 8px #8CEBE580"
+                  : "none",
+              transition: "background 0.2s, box-shadow 0.2s, padding 0.2s",
+              filter: isRecording && isActivatedState ? "blur(0.5px)" : "none",
             }}
           >
-            {chatMessages.map((message, index) => (
-              <div
-                key={index}
-                style={{
-                  marginBottom: "10px",
-                  textAlign: message.isUser ? "right" : "left",
-                }}
-              >
+            {/* Background layer for chatbox body opacity */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "16px",
+                background: "#18181b",
+                opacity: 0.3,
+                pointerEvents: "none",
+                zIndex: 0,
+              }}
+            />
+            <div
+              style={{
+                overflowY: "auto",
+                padding: "14px",
+                borderRadius: "16px",
+                background: "transparent",
+                minHeight: 0,
+                boxShadow:
+                  isRecording && isActivatedState
+                    ? "0 2px 16px 0 #D500D840 inset, 0 2px 24px 0 #8CEBE540 inset"
+                    : "none",
+                transition: "box-shadow 0.2s",
+                position: "relative",
+                zIndex: 1,
+                height: "420px",
+              }}
+            >
+              {chatMessages.map((message, index) => (
                 <div
+                  key={index}
                   style={{
-                    display: "inline-block",
-                    padding: "8px 12px",
-                    borderRadius: "12px",
-                    backgroundColor: message.isUser ? "#8CEBE5" : "#D500D8",
-                    color: message.isUser ? "#000" : "#fff",
-                    maxWidth: "80%",
-                    wordWrap: "break-word",
+                    marginBottom: "10px",
+                    textAlign: message.isUser ? "right" : "left",
                   }}
                 >
-                  {message.text}
+                  <div
+                    style={{
+                      display: "inline-block",
+                      padding: "8px 12px",
+                      borderRadius: "12px",
+                      backgroundColor: message.isUser ? "#8CEBE5" : "#D500D8",
+                      color: message.isUser ? "#000" : "#fff",
+                      maxWidth: "80%",
+                      wordWrap: "break-word",
+                    }}
+                  >
+                    {message.text}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
           {/* Chat input form */}
@@ -577,77 +607,76 @@ export default function AnimatedVectorBox({
       )}
 
       {/* Music notes - positioned outside the box but relative to it */}
-      {(isExpanded &&
+      {isExpanded &&
         !isActivatedState &&
         !voiceResponse &&
-        !isGeneratingVoiceResponse) ||
-      (isRecording && !isActivatedState) ? (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: isResetting ? 0 : 1,
-          }}
-          exit={{ opacity: 0 }}
-          transition={{
-            duration: isResetting ? 0.8 : 0.5,
-            ease: "easeInOut",
-            delay: isResetting ? 0 : 0.3,
-          }}
-          style={{
-            position: "absolute",
-            top: "55%",
-            left: `calc(${leftMargin}px + 80px)`,
-            transform: "translateY(-50%)",
-            height: "50px",
-            width: "50px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            pointerEvents: "none",
-            zIndex: 10,
-          }}
-        >
-          {/* First animated vector */}
-          <motion.svg
-            width="40"
-            height="40"
-            viewBox="0 0 25 45"
+        !isGeneratingVoiceResponse && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: isResetting ? 0 : 1,
+            }}
+            exit={{ opacity: 0 }}
+            transition={{
+              duration: isResetting ? 0.8 : 0.5,
+              ease: "easeInOut",
+              delay: isResetting ? 0 : 0.3,
+            }}
             style={{
               position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
+              top: "55%",
+              left: `calc(${leftMargin}px + 80px)`,
+              transform: "translateY(-50%)",
+              height: "50px",
+              width: "50px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+              zIndex: 10,
             }}
           >
-            <motion.path
-              d={anim1.d}
-              fill={anim1.fill}
-              animate={{ d: anim1.d, fill: anim1.fill }}
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-            />
-          </motion.svg>
+            {/* First animated vector */}
+            <motion.svg
+              width="40"
+              height="40"
+              viewBox="0 0 25 45"
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <motion.path
+                d={anim1.d}
+                fill={anim1.fill}
+                animate={{ d: anim1.d, fill: anim1.fill }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              />
+            </motion.svg>
 
-          {/* Second animated vector */}
-          <motion.svg
-            width="40"
-            height="40"
-            viewBox="0 0 50 50"
-            style={{
-              position: "absolute",
-              top: "60%",
-              left: "70%",
-              transform: "translate(-50%, -50%)",
-            }}
-          >
-            <motion.path
-              d={anim2.d}
-              fill={anim2.fill}
-              animate={{ d: anim2.d, fill: anim2.fill }}
-              transition={{ duration: 0.5, ease: "easeInOut" }}
-            />
-          </motion.svg>
-        </motion.div>
-      ) : null}
+            {/* Second animated vector */}
+            <motion.svg
+              width="40"
+              height="40"
+              viewBox="0 0 50 50"
+              style={{
+                position: "absolute",
+                top: "60%",
+                left: "70%",
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <motion.path
+                d={anim2.d}
+                fill={anim2.fill}
+                animate={{ d: anim2.d, fill: anim2.fill }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              />
+            </motion.svg>
+          </motion.div>
+        )}
 
       {/* Third vector - positioned between music notes and Dashi */}
       {isExpanded &&
