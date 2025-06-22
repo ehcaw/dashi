@@ -96,10 +96,11 @@ export default function AnimatedVectorBox({
 
   // Voice recording state
   const [transcription, setTranscription] = useState<string | null>(null);
-  
+
   // Voice response state
   const [voiceResponse, setVoiceResponse] = useState<string>("");
-  const [isGeneratingVoiceResponse, setIsGeneratingVoiceResponse] = useState(false);
+  const [isGeneratingVoiceResponse, setIsGeneratingVoiceResponse] =
+    useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -129,7 +130,7 @@ export default function AnimatedVectorBox({
   const handleReset = () => {
     setIsResetting(true);
     setPositionsSetToDefault(false);
-    
+
     // Wait for fade out animation to complete before resetting state
     setTimeout(() => {
       setIsActivated(false);
@@ -152,7 +153,9 @@ export default function AnimatedVectorBox({
       "isExpanded:",
       isExpanded,
       "isActivatedState:",
-      isActivatedState
+      isActivatedState,
+      "isRecording:",
+      isRecording
     );
 
     const handleKeyDown = async (event: KeyboardEvent) => {
@@ -190,19 +193,16 @@ export default function AnimatedVectorBox({
       // Command + Option + V (voice mode)
       const isVKey =
         event.key === "v" || event.key === "V" || event.keyCode === 86;
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.altKey &&
-        isVKey &&
-        !isRecording
-      ) {
-        console.log(
-          "Command + Option + V detected! Starting voice recording..."
-        );
-        try {
-          await startRecording();
-        } catch (err) {
-          alert("Failed to start recording: " + err);
+      if ((event.metaKey || event.ctrlKey) && event.altKey && isVKey) {
+        if (!isExpanded) {
+          setIsExpanded(true);
+        }
+        if (!isRecording) {
+          try {
+            await startRecording();
+          } catch (err) {
+            alert("Failed to start recording: " + err);
+          }
         }
       }
 
@@ -226,55 +226,49 @@ export default function AnimatedVectorBox({
     };
 
     const handleKeyUp = async (event: KeyboardEvent) => {
-      // Command + Option + V (voice mode stop)
       const isVKey =
         event.key === "v" || event.key === "V" || event.keyCode === 86;
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        event.altKey &&
-        isVKey &&
-        isRecording
-      ) {
-        console.log(
-          "Command + Option + V released! Stopping voice recording..."
-        );
-        try {
-          const result = await stopAndTranscribe();
-          console.log(result);
-          setTranscription(result);
-          // Add transcription as a user message in chat
-          if (result) {
-            setChatMessages((prev) => [
-              ...prev,
-              { text: result, isUser: true },
-            ]);
-            setIsGeneratingVoiceResponse(true);
-            setVoiceResponse("");
-            const dashiResponseStream = await generate_response(result);
-            setChatMessages((prev) => [...prev, { text: "", isUser: false }]);
-            for await (const chunk of dashiResponseStream) {
-              if (chunk.content && chunk.content !== "undefined") {
-                setVoiceResponse(prev => prev + chunk.content);
-                setChatMessages((prev) => {
-                  // Copy the array and the last message
-                  const updated = [...prev];
-                  if (updated.length > 0) {
-                    updated[updated.length - 1] = {
-                      ...updated[updated.length - 1],
-                      text:
-                        (updated[updated.length - 1].text || "") +
-                        chunk.content,
-                    };
-                  }
-                  return updated;
-                });
+      if ((event.metaKey || event.ctrlKey) && event.altKey && isVKey) {
+        if (isRecording) {
+          try {
+            const result = await stopAndTranscribe();
+            setTranscription(result);
+            if (result) {
+              setChatMessages((prev) => [
+                ...prev,
+                { text: result, isUser: true },
+              ]);
+              setIsGeneratingVoiceResponse(true);
+              setVoiceResponse("");
+              const dashiResponseStream = await generate_response(result);
+              setChatMessages((prev) => [...prev, { text: "", isUser: false }]);
+              for await (const chunk of dashiResponseStream) {
+                if (
+                  chunk.messageType === "assistant_message" &&
+                  typeof chunk.content === "string" &&
+                  chunk.content !== "undefined"
+                ) {
+                  setVoiceResponse((prev) => prev + chunk.content);
+                  setChatMessages((prev) => {
+                    const updated = [...prev];
+                    if (updated.length > 0) {
+                      updated[updated.length - 1] = {
+                        ...updated[updated.length - 1],
+                        text:
+                          (updated[updated.length - 1].text || "") +
+                          chunk.content,
+                      };
+                    }
+                    return updated;
+                  });
+                }
               }
+              setIsGeneratingVoiceResponse(false);
             }
+          } catch (err) {
+            alert("Failed to transcribe: " + err);
             setIsGeneratingVoiceResponse(false);
           }
-        } catch (err) {
-          alert("Failed to transcribe: " + err);
-          setIsGeneratingVoiceResponse(false);
         }
       }
     };
@@ -316,9 +310,12 @@ export default function AnimatedVectorBox({
         const dashiResponseStream = await generate_response(chatInput);
         setChatMessages((prev) => [...prev, { text: "", isUser: false }]);
         for await (const chunk of dashiResponseStream) {
-          if (chunk.content && chunk.content !== "undefined") {
+          if (
+            chunk.messageType === "assistant_message" &&
+            typeof chunk.content === "string" &&
+            chunk.content !== "undefined"
+          ) {
             setChatMessages((prev) => {
-              // Copy the array and the last message
               const updated = [...prev];
               if (updated.length > 0) {
                 updated[updated.length - 1] = {
@@ -349,23 +346,29 @@ export default function AnimatedVectorBox({
     : isActivated
     ? 100
     : 100;
-    
+
   // Calculate width for voice response
   const getVoiceResponseWidth = () => {
     if (!voiceResponse && !isGeneratingVoiceResponse) return currentWidth;
-    
+
     // Base width: Dashi (60px) + gap (20px) + minimum text width (200px)
     const baseWidth = 280;
-    
+
     // Estimate text width (rough calculation: ~8px per character)
-    const estimatedTextWidth = Math.min(voiceResponse.length * 8, window.innerWidth * 0.5 - baseWidth);
-    
+    const estimatedTextWidth = Math.min(
+      voiceResponse.length * 8,
+      window.innerWidth * 0.5 - baseWidth
+    );
+
     // Calculate total width, capped at 50% of screen width
-    const totalWidth = Math.min(baseWidth + estimatedTextWidth, window.innerWidth * 0.5);
-    
+    const totalWidth = Math.min(
+      baseWidth + estimatedTextWidth,
+      window.innerWidth * 0.5
+    );
+
     return Math.max(totalWidth, currentWidth);
   };
-  
+
   const finalWidth = getVoiceResponseWidth();
 
   const currentHeight = isResetting
@@ -574,7 +577,11 @@ export default function AnimatedVectorBox({
       )}
 
       {/* Music notes - positioned outside the box but relative to it */}
-      {isExpanded && !isActivatedState && !voiceResponse && !isGeneratingVoiceResponse && (
+      {(isExpanded &&
+        !isActivatedState &&
+        !voiceResponse &&
+        !isGeneratingVoiceResponse) ||
+      (isRecording && !isActivatedState) ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{
@@ -640,56 +647,166 @@ export default function AnimatedVectorBox({
             />
           </motion.svg>
         </motion.div>
-      )}
+      ) : null}
 
       {/* Third vector - positioned between music notes and Dashi */}
-      {isExpanded && !isActivatedState && !voiceResponse && !isGeneratingVoiceResponse && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{
-            opacity: isResetting ? 0 : 1,
-          }}
-          exit={{ opacity: 0 }}
-          transition={{
-            duration: isResetting ? 0.8 : 0.5,
-            ease: "easeInOut",
-            delay: isResetting ? 0 : 0.3,
-          }}
-          style={{
-            position: "absolute",
-            top: "75%",
-            left: `calc(${leftMargin}px + 65px)`,
-            transform: "translateY(-50%)",
-            height: "50px",
-            width: "50px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            pointerEvents: "none",
-            zIndex: 10,
-          }}
-        >
-          <motion.svg
-            width="40"
-            height="40"
-            viewBox="0 0 50 50"
+      {isExpanded &&
+        !isActivatedState &&
+        !voiceResponse &&
+        !isGeneratingVoiceResponse && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{
+              opacity: isResetting ? 0 : 1,
+            }}
+            exit={{ opacity: 0 }}
+            transition={{
+              duration: isResetting ? 0.8 : 0.5,
+              ease: "easeInOut",
+              delay: isResetting ? 0 : 0.3,
+            }}
             style={{
               position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
+              top: "75%",
+              left: `calc(${leftMargin}px + 65px)`,
+              transform: "translateY(-50%)",
+              height: "50px",
+              width: "50px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+              zIndex: 10,
             }}
           >
-            <motion.path
-              d={path3}
-              fill="none"
-              stroke="#8CEBE5"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </motion.svg>
-        </motion.div>
+            <motion.svg
+              width="40"
+              height="40"
+              viewBox="0 0 50 50"
+              style={{
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <motion.path
+                d={path3}
+                fill="none"
+                stroke="#8CEBE5"
+                strokeWidth="4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </motion.svg>
+          </motion.div>
+        )}
+
+      {/* Dashi and voice response row (only during voice response generation) */}
+      {(voiceResponse || isGeneratingVoiceResponse) && !isActivatedState && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: 0,
+            width: finalWidth,
+            height: "120px",
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            zIndex: 20,
+            pointerEvents: "none",
+            transform: "translateY(-50%)",
+          }}
+        >
+          {/* Dashi on the left edge */}
+          <motion.div
+            initial={{ opacity: 0, left: 0 }}
+            animate={{ opacity: 1, left: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            style={{
+              position: "relative",
+              height: "60px",
+              width: "60px",
+              minWidth: "60px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginLeft: `${leftMargin}px`,
+            }}
+          >
+            <motion.svg
+              viewBox="0 0 100 100"
+              style={{ height: "100%", aspectRatio: "1" }}
+            >
+              <defs>
+                <linearGradient
+                  id="vectorGradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="0%"
+                  y2="100%"
+                >
+                  <stop offset="0%" stopColor="#D500D8" />
+                  <stop offset="100%" stopColor="#8CEBE5" />
+                </linearGradient>
+              </defs>
+              {vectorPaths ? (
+                vectorPaths.map((path, index) => (
+                  <motion.path
+                    key={index}
+                    d={path}
+                    fill="url(#vectorGradient)"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{
+                      duration: 1,
+                      ease: "easeInOut",
+                      delay: index * 0.2,
+                    }}
+                  />
+                ))
+              ) : (
+                <motion.path
+                  d={vectorPath}
+                  fill="url(#vectorGradient)"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 1, ease: "easeInOut" }}
+                />
+              )}
+            </motion.svg>
+          </motion.div>
+
+          {/* Voice response text on the right, no background */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            style={{
+              marginLeft: 24,
+              color: "#8CEBE5",
+              fontSize: "16px",
+              lineHeight: "1.4",
+              whiteSpace: "pre-wrap",
+              wordWrap: "break-word",
+              maxHeight: "120px",
+              overflowX: "auto",
+              overflowY: "hidden",
+              borderRadius: 0,
+              background: "none",
+              border: "none",
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+            }}
+          >
+            {isGeneratingVoiceResponse && !voiceResponse
+              ? "Generating response..."
+              : voiceResponse}
+          </motion.div>
+        </div>
       )}
 
       {/* Dashi - positioned outside the box but relative to it */}
@@ -761,7 +878,10 @@ export default function AnimatedVectorBox({
           position: "absolute",
           height: isActivatedState ? "60px" : "80%",
           width: isActivatedState ? "60px" : "auto",
-          display: "flex",
+          display:
+            (voiceResponse || isGeneratingVoiceResponse) && !isActivatedState
+              ? "none"
+              : "flex",
           alignItems: "center",
           justifyContent: "center",
           pointerEvents: "none",
@@ -817,67 +937,7 @@ export default function AnimatedVectorBox({
         </motion.svg>
       </motion.div>
 
-      {/* Voice response text - positioned to the right of Dashi */}
-      {(voiceResponse || isGeneratingVoiceResponse) && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          style={{
-            position: "absolute",
-            top: "50%",
-            left: `calc(${leftMargin}px + 80px)`,
-            transform: "translateY(-50%)",
-            maxWidth: `calc(50vw - ${leftMargin}px - 100px)`,
-            maxHeight: "120px",
-            overflowX: "auto",
-            overflowY: "hidden",
-            zIndex: 10,
-            pointerEvents: "none",
-          }}
-        >
-          <div
-            style={{
-              color: "#8CEBE5",
-              fontSize: "14px",
-              lineHeight: "1.4",
-              whiteSpace: "pre-wrap",
-              wordWrap: "break-word",
-              maxHeight: "120px",
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              padding: "10px",
-              backgroundColor: "rgba(0, 0, 0, 0.3)",
-              borderRadius: "8px",
-              border: "1px solid rgba(140, 235, 229, 0.3)",
-            }}
-          >
-            {isGeneratingVoiceResponse && !voiceResponse ? "Generating response..." : voiceResponse}
-          </div>
-        </motion.div>
-      )}
-
       {/* Recording indicator */}
-      {isRecording && (
-        <div
-          style={{
-            position: "absolute",
-            top: 10,
-            right: 10,
-            color: "#D500D8",
-            background: "rgba(0,0,0,0.7)",
-            padding: "8px 16px",
-            borderRadius: "8px",
-            zIndex: 100,
-            fontWeight: "bold",
-          }}
-        >
-          Recording... Speak now!
-        </div>
-      )}
     </div>
   );
 }
