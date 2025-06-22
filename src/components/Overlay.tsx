@@ -16,6 +16,8 @@ export function Overlay() {
     isLoading,
   } = useCopilotChat();
 
+  
+
   const [isOpen, setIsOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
 
