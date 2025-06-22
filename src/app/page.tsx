@@ -24,7 +24,19 @@ export default function Home() {
         backgroundRepeat: "no-repeat",
       }}
     >
-      <div style={{ marginTop: "50px" }}>
+      <div
+        style={{
+          position: "fixed",
+          top: 40,
+          right: "47%",
+          zIndex: 9999,
+          background: "rgba(24, 24, 27, 0.5)", // translucent black
+          borderRadius: 16,
+          boxShadow: "0 4px 32px rgba(0,0,0,0.2)",
+          backdropFilter: "blur(8px)", // for frosted glass effect
+          pointerEvents: "auto",
+        }}
+      >
         <AnimatedVectorBox width={boxWidth} vectorPaths={vectorPaths} />
       </div>
     </main>

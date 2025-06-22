@@ -27,10 +27,9 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        style={{ background: "transparent" }}
       >
-        <CopilotKit publicApiKey="ck_pub_bd6434fb990a79d38df40606ee2e059a">
-          {children}
-        </CopilotKit>
+        {children}
       </body>
     </html>
   );

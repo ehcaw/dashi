@@ -339,7 +339,7 @@ export default function AnimatedVectorBox({
   const getVoiceResponseWidth = () => {
     // In chat mode, always use fixed width regardless of voice response or expansion state
     if (isActivatedState) return 100;
-    
+
     if (!voiceResponse && !isGeneratingVoiceResponse) return currentWidth;
 
     // Base width: Dashi (60px) + gap (20px) + minimum text width (200px)

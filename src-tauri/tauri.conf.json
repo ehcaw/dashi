@@ -10,13 +10,19 @@
     "beforeBuildCommand": "bun build"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "dashi",
-        "width": 800,
-        "height": 600,
+        "width": 1200,
+        "height": 800,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "visible": true,
+        "focus": false
       }
     ],
     "security": {
