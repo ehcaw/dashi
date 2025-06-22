@@ -377,6 +377,9 @@ export default function AnimatedVectorBox({
     ? "calc(50% - 200px)"
     : "0px";
 
+  // In chat mode, the box should be 400px wide to accommodate the chat interface
+  const chatModeWidth = isActivatedState ? 400 : finalWidth;
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       {/* Initial animation - imdashianimate.json */}
@@ -412,7 +415,7 @@ export default function AnimatedVectorBox({
 
       <motion.div
         animate={{
-          width: finalWidth,
+          width: chatModeWidth,
           height: currentHeight,
           left: currentLeft,
           opacity: isResetting
@@ -444,7 +447,7 @@ export default function AnimatedVectorBox({
         onClick={!isActivated ? handleFirstClick : undefined}
       ></motion.div>
 
-      {/* Chat interface - positioned outside the box to avoid opacity issues */}
+      {/* Chat interface - positioned on top of the black box */}
       {isActivatedState && (
         <motion.div
           initial={{ opacity: 0 }}
@@ -914,7 +917,7 @@ export default function AnimatedVectorBox({
           alignItems: "center",
           justifyContent: "center",
           pointerEvents: "none",
-          zIndex: 10,
+          zIndex: 20,
         }}
       >
         <motion.svg
