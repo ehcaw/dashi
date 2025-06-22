@@ -96,6 +96,10 @@ export default function AnimatedVectorBox({
 
   // Voice recording state
   const [transcription, setTranscription] = useState<string | null>(null);
+  
+  // Voice response state
+  const [voiceResponse, setVoiceResponse] = useState<string>("");
+  const [isGeneratingVoiceResponse, setIsGeneratingVoiceResponse] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -125,13 +129,16 @@ export default function AnimatedVectorBox({
   const handleReset = () => {
     setIsResetting(true);
     setPositionsSetToDefault(false);
-
+    
     // Wait for fade out animation to complete before resetting state
     setTimeout(() => {
       setIsActivated(false);
       setIsExpanded(false);
       setIsActivatedState(false);
       setHasMovedLeft(false);
+      setChatMessages([]);
+      setVoiceResponse("");
+      setIsGeneratingVoiceResponse(false);
       setPositionsSetToDefault(true);
       setIsResetting(false);
     }, 800); // Match the fade out duration
@@ -241,10 +248,13 @@ export default function AnimatedVectorBox({
               ...prev,
               { text: result, isUser: true },
             ]);
+            setIsGeneratingVoiceResponse(true);
+            setVoiceResponse("");
             const dashiResponseStream = await generate_response(result);
             setChatMessages((prev) => [...prev, { text: "", isUser: false }]);
             for await (const chunk of dashiResponseStream) {
               if (chunk.content && chunk.content !== "undefined") {
+                setVoiceResponse(prev => prev + chunk.content);
                 setChatMessages((prev) => {
                   // Copy the array and the last message
                   const updated = [...prev];
@@ -260,9 +270,11 @@ export default function AnimatedVectorBox({
                 });
               }
             }
+            setIsGeneratingVoiceResponse(false);
           }
         } catch (err) {
           alert("Failed to transcribe: " + err);
+          setIsGeneratingVoiceResponse(false);
         }
       }
     };
@@ -337,6 +349,25 @@ export default function AnimatedVectorBox({
     : isActivated
     ? 100
     : 100;
+    
+  // Calculate width for voice response
+  const getVoiceResponseWidth = () => {
+    if (!voiceResponse && !isGeneratingVoiceResponse) return currentWidth;
+    
+    // Base width: Dashi (60px) + gap (20px) + minimum text width (200px)
+    const baseWidth = 280;
+    
+    // Estimate text width (rough calculation: ~8px per character)
+    const estimatedTextWidth = Math.min(voiceResponse.length * 8, window.innerWidth * 0.5 - baseWidth);
+    
+    // Calculate total width, capped at 50% of screen width
+    const totalWidth = Math.min(baseWidth + estimatedTextWidth, window.innerWidth * 0.5);
+    
+    return Math.max(totalWidth, currentWidth);
+  };
+  
+  const finalWidth = getVoiceResponseWidth();
+
   const currentHeight = isResetting
     ? isActivatedState
       ? 600
@@ -387,7 +418,7 @@ export default function AnimatedVectorBox({
 
       <motion.div
         animate={{
-          width: currentWidth,
+          width: finalWidth,
           height: currentHeight,
           left: currentLeft,
           opacity: isResetting
@@ -543,7 +574,7 @@ export default function AnimatedVectorBox({
       )}
 
       {/* Music notes - positioned outside the box but relative to it */}
-      {isExpanded && !isActivatedState && (
+      {isExpanded && !isActivatedState && !voiceResponse && !isGeneratingVoiceResponse && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{
@@ -612,7 +643,7 @@ export default function AnimatedVectorBox({
       )}
 
       {/* Third vector - positioned between music notes and Dashi */}
-      {isExpanded && !isActivatedState && (
+      {isExpanded && !isActivatedState && !voiceResponse && !isGeneratingVoiceResponse && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{
@@ -785,6 +816,49 @@ export default function AnimatedVectorBox({
           )}
         </motion.svg>
       </motion.div>
+
+      {/* Voice response text - positioned to the right of Dashi */}
+      {(voiceResponse || isGeneratingVoiceResponse) && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: `calc(${leftMargin}px + 80px)`,
+            transform: "translateY(-50%)",
+            maxWidth: `calc(50vw - ${leftMargin}px - 100px)`,
+            maxHeight: "120px",
+            overflowX: "auto",
+            overflowY: "hidden",
+            zIndex: 10,
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              color: "#8CEBE5",
+              fontSize: "14px",
+              lineHeight: "1.4",
+              whiteSpace: "pre-wrap",
+              wordWrap: "break-word",
+              maxHeight: "120px",
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              padding: "10px",
+              backgroundColor: "rgba(0, 0, 0, 0.3)",
+              borderRadius: "8px",
+              border: "1px solid rgba(140, 235, 229, 0.3)",
+            }}
+          >
+            {isGeneratingVoiceResponse && !voiceResponse ? "Generating response..." : voiceResponse}
+          </div>
+        </motion.div>
+      )}
 
       {/* Recording indicator */}
       {isRecording && (
