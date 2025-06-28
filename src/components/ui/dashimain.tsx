@@ -6,6 +6,7 @@ import Lottie from "lottie-react";
 import imdashianimate from "../../../public/imdashianimate.json";
 import { useVoiceRecorder } from "@/lib/tts";
 import { generate_response } from "@/lib/letta";
+import { invoke } from "@tauri-apps/api/core";
 
 interface AnimatedVectorBoxProps {
   width?: number;
@@ -85,13 +86,13 @@ export default function AnimatedVectorBox({
   // Animation state for vector 1
   const [anim1, cycle1] = useCycle(
     { d: path1, fill: "#8CEBE5" },
-    { d: scalePath(path1, 1.2), fill: "#D500D8" }
+    { d: scalePath(path1, 1.2), fill: "#D500D8" },
   );
 
   // Animation state for vector 2
   const [anim2, cycle2] = useCycle(
     { d: scalePath(path2, 1.2), fill: "#D500D8" },
-    { d: path2, fill: "#8CEBE5" }
+    { d: path2, fill: "#8CEBE5" },
   );
 
   // Voice recording state
@@ -152,7 +153,7 @@ export default function AnimatedVectorBox({
       "isExpanded:",
       isExpanded,
       "isActivatedState:",
-      isActivatedState
+      isActivatedState,
     );
 
     const handleKeyDown = async (event: KeyboardEvent) => {
@@ -166,7 +167,7 @@ export default function AnimatedVectorBox({
         "Alt:",
         event.altKey,
         "Ctrl:",
-        event.ctrlKey
+        event.ctrlKey,
       );
 
       // Check for ESC key to reset to default mode
@@ -266,6 +267,8 @@ export default function AnimatedVectorBox({
                 }
               }
               setIsGeneratingVoiceResponse(false);
+              console.log(voiceResponse);
+              await invoke("speak_text", { text: voiceResponse });
             }
           } catch (err) {
             alert("Failed to transcribe: " + err);
@@ -339,7 +342,7 @@ export default function AnimatedVectorBox({
   const getVoiceResponseWidth = () => {
     // In chat mode, always use fixed width regardless of voice response or expansion state
     if (isActivatedState) return 100;
-    
+
     if (!voiceResponse && !isGeneratingVoiceResponse) return currentWidth;
 
     // Base width: Dashi (60px) + gap (20px) + minimum text width (200px)
@@ -348,13 +351,13 @@ export default function AnimatedVectorBox({
     // Estimate text width (rough calculation: ~8px per character)
     const estimatedTextWidth = Math.min(
       voiceResponse.length * 8,
-      window.innerWidth * 0.5 - baseWidth
+      window.innerWidth * 0.5 - baseWidth,
     );
 
     // Calculate total width, capped at 50% of screen width
     const totalWidth = Math.min(
       baseWidth + estimatedTextWidth,
-      window.innerWidth * 0.5
+      window.innerWidth * 0.5,
     );
 
     return Math.max(totalWidth, currentWidth);
@@ -367,15 +370,15 @@ export default function AnimatedVectorBox({
       ? 600
       : height
     : isActivatedState
-    ? 600
-    : height;
+      ? 600
+      : height;
   const currentLeft = isResetting
     ? isActivatedState
       ? "calc(50% - 200px)"
       : "0px"
     : isActivatedState
-    ? "calc(50% - 200px)"
-    : "0px";
+      ? "calc(50% - 200px)"
+      : "0px";
 
   // In chat mode, the box should be 400px wide to accommodate the chat interface
   const chatModeWidth = isActivatedState ? 400 : finalWidth;
@@ -421,10 +424,10 @@ export default function AnimatedVectorBox({
           opacity: isResetting
             ? 0
             : isInitialAnimation
-            ? 0.3
-            : isActivated
-            ? 0.3
-            : 0.1,
+              ? 0.3
+              : isActivated
+                ? 0.3
+                : 0.1,
         }}
         transition={{
           duration: isResetting ? 0.8 : 0.5,
@@ -853,38 +856,38 @@ export default function AnimatedVectorBox({
             ? isActivatedState
               ? "calc(50% - 180px)"
               : hasMovedLeft
-              ? `calc(${leftMargin}px + 20px)`
-              : "65%"
+                ? `calc(${leftMargin}px + 20px)`
+                : "65%"
             : isActivatedState
-            ? "calc(50% - 180px)"
-            : hasMovedLeft
-            ? `calc(${leftMargin}px + 20px)`
-            : "65%",
+              ? "calc(50% - 180px)"
+              : hasMovedLeft
+                ? `calc(${leftMargin}px + 20px)`
+                : "65%",
           top: isResetting
             ? isActivatedState
               ? "30px"
               : "65%"
             : isActivatedState
-            ? "30px"
-            : "65%",
+              ? "30px"
+              : "65%",
           transform: isResetting
             ? isActivatedState
               ? "none"
               : hasMovedLeft
-              ? "translateY(-50%)"
-              : "translate(-50%, -50%)"
+                ? "translateY(-50%)"
+                : "translate(-50%, -50%)"
             : isActivatedState
-            ? "none"
-            : hasMovedLeft
-            ? "translateY(-50%)"
-            : "translate(-50%, -50%)",
+              ? "none"
+              : hasMovedLeft
+                ? "translateY(-50%)"
+                : "translate(-50%, -50%)",
           opacity: isResetting
             ? 0
             : isInitialAnimation
-            ? 1
-            : isActivated
-            ? 1
-            : 0.1,
+              ? 1
+              : isActivated
+                ? 1
+                : 0.1,
         }}
         transition={{
           duration: isResetting ? 0.8 : isInitialAnimation ? 1 : 0.5,

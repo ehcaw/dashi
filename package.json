@@ -13,6 +13,7 @@
     "@copilotkit/react-ui": "^1.9.1",
     "@letta-ai/letta-client": "^0.1.132",
     "@radix-ui/react-slot": "^1.2.3",
+    "@tauri-apps/api": "^2.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.18.1",
